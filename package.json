@@ -1,0 +1,19 @@
+{
+  "name": "ai-code-review-app",
+  "version": "1.0.0",
+  "description": "An application that reviews GitHub PRs created by users using a LLM model",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KartikJondhalekar/AI-Code-Review-App.git"
+  },
+  "author": "Kartik Jayram Jondhalekar",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/KartikJondhalekar/AI-Code-Review-App/issues"
+  },
+  "homepage": "https://github.com/KartikJondhalekar/AI-Code-Review-App#readme"
+}
