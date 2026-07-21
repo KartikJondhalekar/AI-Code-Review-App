@@ -2,8 +2,6 @@ import { envSchema, EnvShape } from './env.schema';
 
 /**
  * The fully-typed, immutable application configuration.
- * This is the ONLY object downstream code should depend on for configuration —
- * never process.env directly.
  */
 export interface AppConfig {
     readonly nodeEnv: EnvShape['NODE_ENV'];
