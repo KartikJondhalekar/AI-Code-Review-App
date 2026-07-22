@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ReviewSession {
+  id                 String               @id @default(uuid())
+  repoFullName       String
+  prNumber           Int
+  expectedChunkCount Int
+  createdAt          DateTime             @default(now())
+  chunks             ReviewSessionChunk[]
+
+  @@index([repoFullName, prNumber])
+}
+
+model ReviewSessionChunk {
+  id           String        @id @default(uuid())
+  sessionId    String
+  session      ReviewSession @relation(fields: [sessionId], references: [id])
+  filePath     String
+  status       String        // 'pending' | 'done' | 'failed' | 'superseded'
+  findingsJson String?
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([sessionId, filePath])
+}
+
+model ReviewHistory {
+  id           String   @id @default(uuid())
+  repoFullName String
+  prNumber     Int
+  headSha      String
+  summary      String
+  findingsJson String
+  createdAt    DateTime @default(now())
+
+  @@index([repoFullName, prNumber])
+}
