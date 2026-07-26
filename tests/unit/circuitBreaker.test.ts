@@ -1,4 +1,5 @@
 import { CircuitBreaker } from '../../src/services/CircuitBreaker';
+import { describe, it, expect } from '@jest/globals';
 
 describe('CircuitBreaker', () => {
     it('opens after the failure threshold and falls back', async () => {
