@@ -1,6 +1,7 @@
+/// <reference types="node" />
+
 import { PrismaClient } from '@prisma/client';
 import { ReviewSessionStore } from './src/services/ReviewSessionStore';
-import process from 'process';
 
 async function main(): Promise<void> {
     const prisma = new PrismaClient();
