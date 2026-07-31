@@ -54,7 +54,7 @@ export class InstallationTokenProvider implements IInstallationTokenProvider {
         return token;
     }
 
-    private async refreshToken(installationId: number): Promise<InstallationToken> {
+    protected async refreshToken(installationId: number): Promise<InstallationToken> {
         const result = await this.auth({ type: 'installation', installationId });
         return { token: result.token, expiresAt: new Date(result.expiresAt) };
     }
