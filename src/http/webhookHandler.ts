@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { ReviewOrchestrator } from '../orchestration/ReviewOrchestrator';
 import { Logger } from '../observability/Logger';
 import { parseWebhookPayload, MalformedPayloadError } from './webhookPayload';
+import { Metrics } from '../observability/Metrics';
 
 /**
  * The delivery contract with GitHub:
@@ -13,7 +14,7 @@ import { parseWebhookPayload, MalformedPayloadError } from './webhookPayload';
  * debounceWindowMs, far longer than GitHub's webhook ACK tolerance, so the
  * pipeline must not run inline in the request/response cycle.
  */
-export function createWebhookHandler(orchestrator: ReviewOrchestrator, logger: Logger) {
+export function createWebhookHandler(orchestrator: ReviewOrchestrator, logger: Logger, metrics: Metrics) {
     return (req: Request, res: Response): void => {
         const traceId = res.locals.traceId as string;
         const eventType = req.header('x-github-event');
@@ -24,6 +25,7 @@ export function createWebhookHandler(orchestrator: ReviewOrchestrator, logger: L
             payload = parseWebhookPayload(req.body as Buffer, eventType, deliveryId);
         } catch (err) {
             if (err instanceof MalformedPayloadError) {
+                metrics.webhooksReceived.inc({ outcome: 'malformed' });
                 logger.warn('webhook payload rejected', { traceId, deliveryId, detail: err.message });
                 res.status(400).json({ error: err.message });
                 return;
@@ -32,11 +34,13 @@ export function createWebhookHandler(orchestrator: ReviewOrchestrator, logger: L
         }
 
         if (payload === null) {
+            metrics.webhooksReceived.inc({ outcome: 'ignored' });
             logger.info('webhook event ignored', { traceId, deliveryId, eventType });
             res.status(204).send();
             return;
         }
 
+        metrics.webhooksReceived.inc({ outcome: 'accepted' });
         // ACK to GitHub immediately, then process out of band.
         res.status(202).json({ status: 'accepted', traceId });
 

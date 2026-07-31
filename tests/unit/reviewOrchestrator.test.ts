@@ -1,6 +1,7 @@
 import { ReviewOrchestrator, ReviewOrchestratorDeps } from '../../src/orchestration/ReviewOrchestrator';
 import { DiffFile } from '../../src/types/github.types';
 import { ReviewResult } from '../../src/types/review.types';
+import { Metrics } from '../../src/observability/Metrics';
 
 const silentLogger = () => {
     const l: any = {};
@@ -44,6 +45,7 @@ function buildDeps(overrides: Partial<ReviewOrchestratorDeps> = {}): {
     const deps: ReviewOrchestratorDeps = {
         config: { review: { maxConcurrentChunkCalls: 5 } } as any,
         logger: silentLogger(),
+        metrics: new Metrics(),
         debounceGate: { acquire: mocks.acquire, isCurrent: mocks.isCurrent },
         diffFetcher: { fetchDiff: mocks.fetchDiff },
         diffRouter: { decideStrategy: mocks.decideStrategy },

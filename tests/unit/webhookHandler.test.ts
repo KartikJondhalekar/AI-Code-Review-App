@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { createTraceMiddleware, createSignatureVerificationMiddleware } from '../../src/http/middleware';
 import { createWebhookHandler } from '../../src/http/webhookHandler';
 import { WebhookVerifier } from '../../src/services/WebhookVerifier';
+import { Metrics } from '../../src/observability/Metrics';
 
 const SECRET = 'unit-test-secret-value';
 const silentLogger = () => {
@@ -18,14 +19,15 @@ const silentLogger = () => {
 
 function buildTestApp(processMock: jest.Mock) {
     const logger = silentLogger();
+    const metrics = new Metrics();
     const orchestrator: any = { processReviewRequest: processMock };
     const app = express();
     app.use(createTraceMiddleware());
     app.post(
         '/webhooks/github',
         express.raw({ type: '*/*' }),
-        createSignatureVerificationMiddleware(new WebhookVerifier(SECRET), logger),
-        createWebhookHandler(orchestrator, logger)
+        createSignatureVerificationMiddleware(new WebhookVerifier(SECRET), logger, metrics),  // ← metrics
+        createWebhookHandler(orchestrator, logger, metrics)
     );
     return app;
 }

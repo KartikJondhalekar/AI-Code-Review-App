@@ -10,10 +10,12 @@ import { IReviewPublisher } from '../interfaces/IReviewPublisher';
 import { PullRequestWebhookPayload, DiffFile } from '../types/github.types';
 import { Finding, ReviewResult } from '../types/review.types';
 import { runWithConcurrencyLimit } from '../utils/concurrency';
+import { Metrics } from '../observability/Metrics';
 
 export interface ReviewOrchestratorDeps {
     readonly config: AppConfig;
     readonly logger: Logger;
+    readonly metrics: Metrics;
     readonly diffFetcher: IGitHubDiffFetcher;
     readonly diffRouter: IDiffRouter;
     readonly llmReviewer: ILLMReviewer;
@@ -54,6 +56,7 @@ export class ReviewOrchestrator {
             sequenceId,
         });
         if (!isCurrent) {
+            this.deps.metrics.reviewsSuperseded.inc({ stage: 'debounce' });
             log.info('superseded during debounce window, skipping');
             return;
         }
@@ -73,6 +76,8 @@ export class ReviewOrchestrator {
         const strategy = this.deps.diffRouter.decideStrategy(files);
         log.info('strategy selected', { strategy, fileCount: files.length });
 
+        const stopPipelineTimer = this.deps.metrics.reviewPipelineDuration.startTimer({ strategy });
+
         const result =
             strategy === 'single-pass'
                 ? await this.deps.llmReviewer.reviewFull(files)
@@ -86,6 +91,8 @@ export class ReviewOrchestrator {
             sequenceId,
         });
         if (!stillCurrent) {
+            this.deps.metrics.reviewsSuperseded.inc({ stage: 'post-review' });
+            stopPipelineTimer();
             log.info('superseded after review completed, discarding result');
             return;
         }
@@ -106,6 +113,12 @@ export class ReviewOrchestrator {
             findingsJson: JSON.stringify(result.findings),
         });
 
+        stopPipelineTimer();
+        this.deps.metrics.reviewsCompleted.inc({ strategy });
+        for (const finding of result.findings) {
+            this.deps.metrics.findingsEmitted.inc({ severity: finding.severity });
+        }
+        
         log.info('review published', { findingCount: result.findings.length });
     }
 

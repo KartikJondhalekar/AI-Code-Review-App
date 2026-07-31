@@ -3,13 +3,9 @@ export type CircuitState = 'closed' | 'open' | 'half-open';
 export interface CircuitBreakerOptions {
     failureThreshold: number;
     openDurationMs: number;
+    onStateChange?: (state: CircuitState) => void;
 }
 
-/**
- * One instance is constructed per LLMReviewer instance (see below) — never
- * a module-level singleton. State is isolated per dependency graph, which
- * also means tests get fresh, uncontaminated circuit state per test case.
- */
 export class CircuitBreaker {
     private state: CircuitState = 'closed';
     private consecutiveFailures = 0;
@@ -23,7 +19,7 @@ export class CircuitBreaker {
             if (elapsed < this.options.openDurationMs) {
                 return fallback();
             }
-            this.state = 'half-open';
+            this.transitionTo('half-open');
         }
 
         try {
@@ -38,15 +34,22 @@ export class CircuitBreaker {
 
     private onSuccess(): void {
         this.consecutiveFailures = 0;
-        this.state = 'closed';
+        this.transitionTo('closed');
         this.openedAt = null;
     }
 
     private onFailure(): void {
         this.consecutiveFailures += 1;
         if (this.state === 'half-open' || this.consecutiveFailures >= this.options.failureThreshold) {
-            this.state = 'open';
             this.openedAt = Date.now();
+            this.transitionTo('open');
+        }
+    }
+
+    private transitionTo(state: CircuitState): void {
+        if (this.state !== state) {
+            this.state = state;
+            this.options.onStateChange?.(state);
         }
     }
 

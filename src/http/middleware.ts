@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { IWebhookVerifier } from '../interfaces/IWebhookVerifier';
 import { Logger } from '../observability/Logger';
+import { Metrics } from '../observability/Metrics';
 
 /**
  * Assigns a correlation id to every request and echoes it as the
@@ -20,7 +21,7 @@ export function createTraceMiddleware() {
  * Verifies the GitHub HMAC-SHA256 signature over the RAW request body.
  * Requires express.raw() to have populated req.body as a Buffer upstream.
  */
-export function createSignatureVerificationMiddleware(verifier: IWebhookVerifier, logger: Logger) {
+export function createSignatureVerificationMiddleware(verifier: IWebhookVerifier, logger: Logger, metrics: Metrics) {
     return (req: Request, res: Response, next: NextFunction): void => {
         const traceId = res.locals.traceId as string;
         const signature = req.header('x-hub-signature-256');
@@ -33,6 +34,7 @@ export function createSignatureVerificationMiddleware(verifier: IWebhookVerifier
         }
 
         if (!verifier.verify(rawBody, signature)) {
+            metrics.webhooksReceived.inc({ outcome: 'rejected' });
             logger.warn('webhook rejected: invalid signature', { traceId });
             res.status(401).json({ error: 'invalid signature' });
             return;

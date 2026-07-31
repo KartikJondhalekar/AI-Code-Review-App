@@ -14,6 +14,7 @@ import { DebounceGate } from './services/DebounceGate';
 import { ReviewPublisher } from './services/ReviewPublisher';
 import { ReviewOrchestrator } from './orchestration/ReviewOrchestrator';
 import { createApp } from './app';
+import { Metrics } from './observability/Metrics';
 
 function main(): void {
     let config;
@@ -28,6 +29,7 @@ function main(): void {
     }
 
     const logger = new JsonLogger({ service: 'ai-code-review-app', env: config.nodeEnv });
+    const metrics = new Metrics();                                    
 
     const prisma = new PrismaClient();
     const redis = new Redis(config.redisUrl);
@@ -42,9 +44,10 @@ function main(): void {
     const orchestrator = new ReviewOrchestrator({
         config,
         logger,
+        metrics,
         diffFetcher: new GitHubDiffFetcher(tokenProvider),
         diffRouter: new DiffRouter(config.review.chunkThresholdLines),
-        llmReviewer: new LLMReviewer(config.openai.apiKey, config.openai.model, config.openai.callTimeoutMs),
+        llmReviewer: new LLMReviewer(config.openai.apiKey, config.openai.model, config.openai.callTimeoutMs, metrics),
         sessionStore: new ReviewSessionStore(prisma),
         historyStore: new ReviewHistoryStore(prisma),
         debounceGate: new DebounceGate(redis, config.review.debounceWindowMs),
@@ -54,6 +57,7 @@ function main(): void {
     const app = createApp({
         config,
         logger,
+        metrics,
         webhookVerifier: new WebhookVerifier(config.github.webhookSecret),
         orchestrator,
     });

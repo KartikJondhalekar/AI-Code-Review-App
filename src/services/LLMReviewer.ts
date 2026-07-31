@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { ILLMReviewer } from '../interfaces/ILLMReviewer';
 import { DiffFile } from '../types/github.types';
 import { ReviewResult, Finding, Severity } from '../types/review.types';
-import { CircuitBreaker } from './CircuitBreaker';
+import { CircuitBreaker, CircuitState } from './CircuitBreaker';
+import { Metrics } from '../observability/Metrics';
 
 const REVIEW_JSON_SCHEMA = {
     name: 'code_review_result',
@@ -32,21 +33,42 @@ const REVIEW_JSON_SCHEMA = {
     strict: true,
 } as const;
 
+const CIRCUIT_STATE_VALUE: Record<CircuitState, number> = { closed: 0, 'half-open': 1, open: 2 };
+
 export class LLMReviewer implements ILLMReviewer {
     private readonly client: OpenAI;
     private readonly circuitBreaker: CircuitBreaker;
 
-    constructor(apiKey: string, private readonly model: string, private readonly callTimeoutMs: number) {
+    constructor(
+        apiKey: string,
+        private readonly model: string,
+        private readonly callTimeoutMs: number,
+        private readonly metrics: Metrics
+    ) {
         this.client = new OpenAI({ apiKey });
-        this.circuitBreaker = new CircuitBreaker({ failureThreshold: 3, openDurationMs: 30_000 });
+        this.circuitBreaker = new CircuitBreaker({
+            failureThreshold: 3,
+            openDurationMs: 30_000,
+            onStateChange: (state) => this.metrics.circuitBreakerState.set(CIRCUIT_STATE_VALUE[state]),
+        });
     }
 
     async reviewFull(files: readonly DiffFile[]): Promise<ReviewResult> {
-        return this.executeReview(this.buildFullDiffPrompt(files));
+        const stop = this.metrics.llmCallDuration.startTimer({ mode: 'full' });
+        try {
+            return await this.executeReview(this.buildFullDiffPrompt(files));
+        } finally {
+            stop();
+        }
     }
 
     async reviewChunk(file: DiffFile): Promise<ReviewResult> {
-        return this.executeReview(this.buildChunkPrompt(file));
+        const stop = this.metrics.llmCallDuration.startTimer({ mode: 'chunk' });
+        try {
+            return await this.executeReview(this.buildChunkPrompt(file));
+        } finally {
+            stop();
+        }
     }
 
     private async executeReview(prompt: string): Promise<ReviewResult> {
